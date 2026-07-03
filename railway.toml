@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+# NOTE: a persistent volume MUST be mounted at /var/lib/mysql (set via the
+# Railway CLI/dashboard, not here) or all CRM data is lost on every redeploy.
+# The internal MySQL seeds itself into an empty volume on first boot.
