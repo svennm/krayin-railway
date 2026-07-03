@@ -1,13 +1,16 @@
 # Deploy Krayin CRM (REST API bundled) on Railway.
 #
 # webkul/krayin:2.2.0 is the prebuilt app image: Nginx + PHP-FPM + Supervisord,
-# Krayin source + krayin/rest-api baked in, and an internal MySQL that seeds
-# itself on first boot.
+# Krayin source + krayin/rest-api baked in, and an internal MySQL whose datadir
+# ships PRE-SEEDED at /var/lib/mysql (the image does not run --initialize).
 #
-# On Railway the persistent volume mounts /var/lib/mysql as root:root with a
-# lost+found dir, which breaks the internal MySQL. We wrap the image's entrypoint
-# to normalize the volume first, then hand off unchanged.
+# Railway mounts the persistent volume at /var/lib/mysql EMPTY, masking that baked
+# data. We snapshot the seed to /opt/mysql-seed at build, and a wrapper entrypoint
+# restores it into the volume on first boot (see railway-entrypoint.sh).
 FROM webkul/krayin:2.2.0
+
+# Snapshot the baked, pre-seeded MySQL datadir to a path the volume won't mask.
+RUN cp -a /var/lib/mysql /opt/mysql-seed
 
 EXPOSE 80
 

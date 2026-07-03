@@ -1,16 +1,28 @@
 #!/bin/bash
 set -e
 
-# Railway mounts the persistent volume at /var/lib/mysql owned by root:root and
-# containing a `lost+found` directory. The image's internal MySQL runs as the
-# `mysql` user and treats a non-empty datadir as "already initialized", so with a
-# raw Railway volume it can neither write nor seed -> crash loop -> 502.
+# The webkul/krayin image ships a PRE-SEEDED internal MySQL datadir baked into
+# /var/lib/mysql (57 tables + admin user; the image does NOT run --initialize at
+# runtime, it just starts mysqld against that baked data).
 #
-# Normalize the volume before handing off to the image's real entrypoint:
-#   - drop lost+found so a first-boot datadir looks empty (triggers init + seed)
-#   - chown to mysql so mysqld can write (harmless on later boots with real data)
+# Railway mounts the persistent volume at /var/lib/mysql EMPTY (root-owned, with a
+# lost+found), which masks the baked data. Result: empty datadir -> mysqld can't
+# start -> crash loop -> 502. (Local Docker named volumes don't hit this because
+# Docker pre-copies the image dir into a fresh named volume; Railway does not.)
+#
+# So at build time we snapshot the baked datadir to /opt/mysql-seed (unmounted),
+# and here we restore it into the volume the first time it's empty. On subsequent
+# boots the volume already holds the (now persistent) MySQL data and we skip it.
 if [ -d /var/lib/mysql ]; then
     rm -rf /var/lib/mysql/lost+found 2>/dev/null || true
+
+    if [ ! -d /var/lib/mysql/mysql ]; then
+        # Fresh/empty volume: clear partial files from failed boots and restore
+        # the baked, pre-seeded datadir.
+        rm -rf /var/lib/mysql/* 2>/dev/null || true
+        cp -a /opt/mysql-seed/. /var/lib/mysql/ 2>/dev/null || true
+    fi
+
     chown -R mysql:mysql /var/lib/mysql 2>/dev/null || true
 fi
 
