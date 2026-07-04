@@ -15,6 +15,14 @@ FROM webkul/krayin:2.2.0
 # refuses to start -> 502. Drop the stock default; keep Krayin's.
 RUN rm -f /etc/nginx/sites-enabled/default
 
+# Railway terminates TLS and forwards plain HTTP to the container. Without
+# trusting the proxy, Laravel generates http:// URLs on an https:// page —
+# breaking CSS/JS (mixed content) and the login POST. Trust all proxies so
+# X-Forwarded-Proto is honored and every generated URL is https.
+RUN sed -i "s|\$middleware->append(CanInstall::class);|\$middleware->append(CanInstall::class);\n        \$middleware->trustProxies(at: '*');|" \
+    /var/www/laravel-crm/bootstrap/app.php \
+    && grep -q trustProxies /var/www/laravel-crm/bootstrap/app.php
+
 # Snapshot the baked, pre-seeded MySQL datadir to a path the volume won't mask.
 RUN cp -a /var/lib/mysql /opt/mysql-seed
 
