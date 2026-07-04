@@ -26,6 +26,14 @@ if [ -d /var/lib/mysql ]; then
     chown -R mysql:mysql /var/lib/mysql 2>/dev/null || true
 fi
 
+# Railway routes public HTTP to $PORT (default 8080); the image's nginx hardcodes
+# `listen 80`. Point nginx at $PORT so Railway's proxy can reach it (else 502).
+# The config lives in the image layer (reset each deploy), so this is idempotent.
+if [ -n "$PORT" ] && [ -f /etc/nginx/conf.d/krayin.conf ]; then
+    sed -i "s/listen 80 /listen ${PORT} /; s/listen \[::\]:80 /listen [::]:${PORT} /" \
+        /etc/nginx/conf.d/krayin.conf
+fi
+
 # Hand off to Krayin's own entrypoint (applies env -> .env, starts MySQL, then
 # execs the CMD, i.e. supervisord).
 exec /usr/local/bin/entrypoint.sh "$@"
